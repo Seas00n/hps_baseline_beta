@@ -57,18 +57,19 @@ rd_aq = phase_shift(rd_aq, 6)[:,0:idx_slope_end]
 rd_at = phase_shift(rd_at, 6)[:,0:idx_slope_end]
 
 s = scio.loadmat(path_+"speed.mat")["speed"][6:15:4]
+ps = 8
 s_hq = scio.loadmat(path_+"treadmill_hip_theta.mat")["treadmill_hip_theta"]
 s_ht = scio.loadmat(path_+"treadmill_hip_tau.mat")["treadmill_hip_tau"]
-s_hq = phase_shift(s_hq, 4)[:,:20][:,6:15:4]
-s_ht = phase_shift(s_ht, 4)[:,:20][:,6:15:4]
+s_hq = phase_shift(s_hq, ps)[:,:20][:,6:15:4]
+s_ht = phase_shift(s_ht, ps)[:,:20][:,6:15:4]
 s_kq = -scio.loadmat(path_+"treadmill_knee_theta.mat")["theta"]
 s_kt = -scio.loadmat(path_+"treadmill_knee_tau.mat")["tau"]
-s_kq = phase_shift(s_kq, 4)[:,:20][:,6:15:4]
-s_kt = phase_shift(s_kt, 4)[:,:20][:,6:15:4]
+s_kq = phase_shift(s_kq, ps)[:,:20][:,6:15:4]
+s_kt = phase_shift(s_kt, ps)[:,:20][:,6:15:4]
 s_aq = scio.loadmat(path_+"treadmill_ankle_theta.mat")["treadmill_ankle_theta"]
 s_at = scio.loadmat(path_+"treadmill_ankle_tau.mat")["treadmill_ankle_tau"]
-s_aq = phase_shift(s_aq, 4)[:,:20][:,6:15:4]
-s_at = phase_shift(s_at, 4)[:,:20][:,6:15:4]
+s_aq = phase_shift(s_aq, ps)[:,:20][:,6:15:4]
+s_at = phase_shift(s_at, ps)[:,:20][:,6:15:4]
 
 idx = np.arange(0,101)
 

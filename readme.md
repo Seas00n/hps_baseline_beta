@@ -15,3 +15,6 @@ python gui_imp_tune.py t
 选择phase, 拖动竖线条调节相位参数
 
 ![](./image/hps_baseline.gif "Title")
+
+# Gait Division
+![](./image/gait_division_paper.png "Title")
