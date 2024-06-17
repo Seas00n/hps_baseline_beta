@@ -9,13 +9,16 @@ import numpy as np
 from pyqtgraph.parametertree import interact, ParameterTree, Parameter
 import random
 from utils import *
-
+# import lcm
+import sys
+# sys.path.append("/home/yuxuan/Project/HPS_Perception/map_ws/src/HPS_Perception/hps_moco/scripts")
+# from core.impedance_lcm.exlcm import impedance_info
 
 
 class ImpTune(QtWidgets.QMainWindow):
     def __init__(self, dataset='t'):
         super().__init__()
-        self.resize(800, 1000)
+        self.resize(600, 800)
         self.layout = pg.LayoutWidget()
         self.setCentralWidget(self.layout)
 
@@ -31,7 +34,7 @@ class ImpTune(QtWidgets.QMainWindow):
         elif dataset == "g":
             from greggdataset_loader import load_data
             from greggdataset_loader import v_key, s_key
-            m = 60
+            m = 65
             _, data = load_data(ab_k="AB06",vk=str(self.context[0]),sk=str(self.context[1]),m=m)
 
         self.dt = grid_interp_dt(v=self.context[0], s=self.context[1], num_frame=data.shape[1])
@@ -53,12 +56,8 @@ class ImpTune(QtWidgets.QMainWindow):
         self.lim_kqe = [[0,25], [0,25], [0,80], [0,30]]
         self.lim_akp = [[0,5], [0,5], [0,1], [0,1]]
         self.lim_akb = [[0,1], [0,1], [0,1], [0,1]]
-        self.lim_aqe = [[-15,15], [0,12], [-5,10], [-15,15]]
+        self.lim_aqe = [[-15,15], [0,10], [-5,5], [-15,15]]
         
-        self.k_mat = [[0,0,0,0],[0,0,0,0]]
-        self.b_mat = [[0,0,0,0],[0,0,0,0]]
-        self.q_e_mat = [[0,0,0,0],[0,0,0,0]]
-
         self.tp = 0 # chosen phase
         self.gait_divisions = []
 
@@ -77,9 +76,6 @@ class ImpTune(QtWidgets.QMainWindow):
         sendParam = interact(self.send_imp)
         tree.addParameters(sendParam, showTop=True)
 
-        # saveParam = interact(self.save_imp)
-        # tree.addParameters(saveParam, showTop=True)
-
         self.params = ptree.Parameter.create(name='Parameters', type='group', children=[
             dict(name='phase',type='int', value=0, limits=[0,3])
         ])
@@ -88,6 +84,8 @@ class ImpTune(QtWidgets.QMainWindow):
 
         self.layout.addWidget(tree, row=0, col=0)
         self.layout.addWidget(self.win, row=3, col=0, rowspan=2,colspan=5)
+        # self.lc = lcm.LCM()
+
         
 
     def init_win(self):
@@ -144,6 +142,7 @@ class ImpTune(QtWidgets.QMainWindow):
         self.ax_aq.setData(y=self.q_a)
         self.ax_kt.setData(y=self.t_k)
         self.ax_at.setData(y=self.t_a)
+        self.cal_st_qe_MT()
         self.cal_imp_IJRR()
 
     
@@ -169,25 +168,21 @@ class ImpTune(QtWidgets.QMainWindow):
         imp_k, p_0, p_1, p_2 = cal_qe_knee_phase1(self.q_k, self.t_k)
         plot_result(p_1, imp_k, self.q_k, self.t_k, ax=self.ax_kqt_phase[p])
         self.qe_k[0] = imp_k[1]
-        self.k_mat[0][p] = imp_k[0] if imp_k[0]<3 else 3
 
         p, c = 1, 'g'
         imp_k, p_0, p_1, p_2 = cal_qe_knee_phase2(self.q_k, self.t_k)
         plot_result(p_1, imp_k, self.q_k, self.t_k, ax=self.ax_kqt_phase[p])
         self.qe_k[1] = imp_k[1]
-        self.k_mat[0][p] = imp_k[0] if imp_k[0]<3 else 3
 
         p, c = 0, 'r'
         imp_a, p_0, p_1, p_2 = cal_qe_ankle_phase1(self.q_a, self.t_a)
         plot_result(p_1, imp_a, self.q_a, self.t_a, ax=self.ax_aqt_phase[p])
         self.qe_a[0] = imp_a[1]
-        self.k_mat[1][p] = imp_a[0] if imp_a[0]<3 else 3
 
         p, c = 1, 'g'
         imp_a, p_0, p_1, p_2 = cal_qe_ankle_phase2(self.q_a, self.t_a)
         plot_result(p_1, imp_a, self.q_a, self.t_a, ax=self.ax_aqt_phase[p])
         self.qe_a[1] = imp_a[1]
-        self.k_mat[1][p] = imp_a[0] if imp_a[0]<3 else 3
     
     def cal_sw_imp_YX(self):
         q_k_swing = self.q_k[self.gait_divisions[1][1]:self.gait_divisions[3][1]]
@@ -231,7 +226,7 @@ class ImpTune(QtWidgets.QMainWindow):
             t_opt_s2 = []
             if degress:
                 qdes = np.deg2rad(qdes)
-            qe2 = qdes[-1]
+            qe2 = qdes[-1]-np.deg2rad(5) if qdes[-1]>np.deg2rad(5) else 0
             s2 = np.shape(qdes)[0]
             q = q_opt_s1[-1]
             dq = dq_opt_s1[-1]
@@ -255,23 +250,27 @@ class ImpTune(QtWidgets.QMainWindow):
                                                     self.gait_divisions[2][0]+len(q_opt_s1)+len(q_opt_s2)), 
                                         y=np.rad2deg(q_opt_s2))
         q_k_swing_real = np.copy(q_k_swing)
+        
         q_k_swing, t_swing = get_parabola(
                 q0=q_k_swing[0],q1=np.max(q_k_swing),q2=q_k_swing[-1],
                 s1=np.argmax(q_k_swing),s2=np.shape(q_k_swing)[0]-1,dt=self.dt)
-        result = minimize(cost_function, (20,1,20,1), args=(q_k_swing, self.dt), method='SLSQP',
+    
+        result = minimize(cost_function, (20,1,20,1), args=(q_k_swing, self.dt), method='Nelder-Mead',
                             bounds=((20,50),(1.3,2),(20,50),(1,2)))
         kp3, kb3, _,_ = result.x
-        print(kp3, kb3)
         qe3 = np.max(q_k_swing)+10
         imp_k3 = [np.deg2rad(kp3), np.deg2rad(kb3), qe3]
-        
-        result2 = minimize(cost_function2, (20,1), args=(q_k_swing, self.dt), method='SLSQP',
+
+        result2 = minimize(cost_function2, (20,1), args=(q_k_swing, self.dt), method='Nelder-Mead',
                             bounds=((20,50),(0.5,2)))
         kp4, kb4 = result2.x
-        print(kp4, kb4)
-        qe4 = self.qe_k[0]
+        qe4 = q_k_swing[-1]-5 if q_k_swing[-1]>5 else 0
         imp_k4 = [np.deg2rad(kp4), np.deg2rad(kb4), qe4]
         plot_q_opt()
+
+        print(q_k_swing[0])
+        print(q_k_swing_real[0])
+        print(np.rad2deg(q_opt_s1[0]))
         np.save("../writting/data/desired_qk_sw_{}.npy".format(self.context[0]), q_k_swing_real)
         np.save("../writting/data/actual_qk_sw1_{}.npy".format(self.context[0]), np.rad2deg(q_opt_s1))
         np.save("../writting/data/actual_qk_sw2_{}.npy".format(self.context[0]), np.rad2deg(q_opt_s2))
@@ -280,19 +279,16 @@ class ImpTune(QtWidgets.QMainWindow):
 
     def gait_division_IJRR(self):
         gait_divisions = []
-        idx_max_qa, max_qa = np.argmax(self.q_a[:50]), np.max(self.q_a[:50])
-        qa_threshold = max_qa-2
-        gait_divisions.append([0, np.where(self.q_a[:idx_max_qa]>qa_threshold)[0][0]])
-        # gait_divisions.append([0, np.argmax(self.q_a[35:50])+30])
-        idx_max_ta, max_ta = np.argmax(self.t_a), np.max(self.t_a)
-        ta_threshold = 20
-        gait_divisions.append([gait_divisions[-1][1], np.where(self.t_a[idx_max_ta:80]<ta_threshold)[0][0]+idx_max_ta])
+        gait_divisions.append([0, np.argmax(self.q_a[35:50])+30])
+        idx_max_ta = np.argmax(self.t_a)
+        gait_divisions.append([gait_divisions[-1][1], np.where(self.t_a[idx_max_ta:80]<40)[0][0]+idx_max_ta])
         gait_divisions.append([gait_divisions[-1][1], np.argmax(self.q_k)])
         gait_divisions.append([gait_divisions[-1][1], self.idx[-1]+1])
         self.gait_divisions = gait_divisions
 
     def cal_imp_IJRR(self, undamping=False):
         q_k, q_a, t_k, t_a = self.q_k, self.q_a, self.t_k, self.t_a
+        qe_k, qe_a = np.array(self.qe_k), -np.array(self.qe_a)
         self.gait_division_IJRR()
         dq_k = np.diff(np.append(q_k[-1], q_k))/self.dt
         dq_k[0] = dq_k[1]
@@ -305,11 +301,6 @@ class ImpTune(QtWidgets.QMainWindow):
         b_mat = [[0,0,0,0],[0,0,0,0]]
         q_e_mat = [[0,0,0,0],[0,0,0,0]]
         
-        self.cal_st_qe_MT()
-        qe_k, qe_a = np.array(self.qe_k), -np.array(self.qe_a)
-
-        b_stance = 8.5/30
-
         p, c = 0, 'r'
         p_0, p_1 = self.gait_divisions[p][0], self.gait_divisions[p][1]
         idx = np.arange(p_0, p_1)
@@ -317,15 +308,11 @@ class ImpTune(QtWidgets.QMainWindow):
             imp_k, t_k_pred = cal_imp_kbqe(q_k[idx],dq_k[idx],t_k[idx], bound=0, unbound=True)
             imp_a, t_a_pred = cal_imp_kbqe(q_a[idx],dq_a[idx],t_a[idx], bound=0, unbound=True)
         else:
-            # bound_k = ((2,0.01,qe_k[p]-3),(3,0.05,qe_k[p]+2))
-            # bound_a = ((0,0), (3,0.2))
-            # imp_k, t_k_pred = cal_imp_kbqe(q_k[idx],dq_k[idx],t_k[idx], bound=bound_k, unbound=False)
-            # imp_a, t_a_pred = cal_imp_kb(q_a[idx],dq_a[idx],qe_a[p],t_a[idx], bound=bound_a, 
-            #                              unbound=False, reverse=True)
-            imp_k = [self.k_mat[0][0], b_stance, qe_k[0]]
-            t_k_pred = cal_tpred(q_k[idx], dq_k[idx], imp_k, reverse=False)
-            imp_a = [self.k_mat[1][0], b_stance, qe_a[0]]
-            t_a_pred = cal_tpred(q_a[idx], dq_a[idx], imp_a, reverse=True)
+            bound_k = ((0,0,qe_k[p]-3),(5,0.1,qe_k[p]))
+            bound_a = ((0,0), (5,0.1))
+            imp_k, t_k_pred = cal_imp_kbqe(q_k[idx],dq_k[idx],t_k[idx], bound=bound_k, unbound=False)
+            imp_a, t_a_pred = cal_imp_kb(q_a[idx],dq_a[idx],qe_a[p],t_a[idx], bound=bound_a, 
+                                         unbound=False, reverse=True)
 
         def plot_result():
             if p <= 1:
@@ -343,17 +330,14 @@ class ImpTune(QtWidgets.QMainWindow):
             imp_k, t_k_pred = cal_imp_kbqe(q_k[idx],dq_k[idx],t_k[idx], bound=0, unbound=True)
             imp_a, t_a_pred = cal_imp_kbqe(q_a[idx],dq_a[idx],t_a[idx], bound=0, unbound=True)
         else:
-            # bound_k = ((2,0.05,qe_k[p]-3),(3,0.1,qe_k[p]+3))
-            # bound_a = ((0,0.05), (3,0.1))
-            # idx_max_ta = np.argmax(t_a)
-            # imp_k, t_k_pred = cal_imp_kbqe(q_k[idx],dq_k[idx],t_k[idx], bound=bound_k, unbound=False)
-            # # imp_a, t_a_pred = cal_imp_kbqe(q_a[idx],dq_a[idx],t_a[idx], bound=bound_a, unbound=False)
-            # imp_a, t_a_pred = cal_imp_kb(q_a[idx], dq_a[idx], qe_a[p], t_a[idx], bound=bound_a, 
-            #                              unbound=False, reverse=True)
-            imp_k = [self.k_mat[0][1], b_stance, qe_k[1]]
-            t_k_pred = cal_tpred(q_k[idx], dq_k[idx], imp_k, reverse=False)
-            imp_a = [self.k_mat[1][1], b_stance, qe_a[1]]
-            t_a_pred = cal_tpred(q_a[idx], dq_a[idx], imp_a, reverse=True)
+            bound_k = ((0,0,qe_k[p]-3),(2,0.05,qe_k[p]+3))
+            # bound_a = ((0,0,qe_a[p]), (5,0.1,qe_a[p]+2))
+            bound_a = ((0,0), (5,0.1))
+            idx_max_ta = np.argmax(t_a)
+            imp_k, t_k_pred = cal_imp_kbqe(q_k[idx],dq_k[idx],t_k[idx], bound=bound_k, unbound=False)
+            # imp_a, t_a_pred = cal_imp_kbqe(q_a[idx],dq_a[idx],t_a[idx], bound=bound_a, unbound=False)
+            imp_a, t_a_pred = cal_imp_kb(q_a[idx], dq_a[idx], qe_a[p], t_a[idx], bound=bound_a, 
+                                         unbound=False, reverse=True)
             
         plot_result()
         imp_k, imp_a = np.round(imp_k, 3), np.round(imp_a, 3)
@@ -483,15 +467,17 @@ class ImpTune(QtWidgets.QMainWindow):
 
     def updateline_kkp(self):
         self.line_kkp.setBounds([self.lim_kkp[self.tp][0],self.lim_kkp[self.tp][1]])
-        self.k_mat[0][self.tp] = self.line_kkp.value()
-        self.replot_kt()
-        self.print_imp()
+        if self.tp <= 1:
+            self.k_mat[0][self.tp] = self.line_kkp.value()
+            self.replot_kt()
+            self.print_imp()
     
     def updateline_kkb(self):
         self.line_kkb.setBounds([self.lim_kkb[self.tp][0],self.lim_kkb[self.tp][1]])
-        self.b_mat[0][self.tp] = self.line_kkb.value()
-        self.replot_kt()
-        self.print_imp()
+        if self.tp <= 1:
+            self.b_mat[0][self.tp] = self.line_kkb.value()
+            self.replot_kt()
+            self.print_imp()
 
     def updateline_kqe(self):
         self.line_kqe.setBounds([self.lim_kqe[self.tp][0],self.lim_kqe[self.tp][1]])
@@ -557,20 +543,6 @@ class ImpTune(QtWidgets.QMainWindow):
         # msg.para_phase3 = para_send[2,:]
         # msg.para_phase4 = para_send[3,:]
         # self.lc.publish("Impedance_Info", msg.encode())
-    
-    def save_imp(self):
-        k_mat_used = np.round(np.array(self.k_mat)*30,2)
-        b_mat_used = np.round(np.array(self.b_mat)*30,2)
-        qe_mat_used = np.round(np.array(self.q_e_mat),2)
-        para_send = np.zeros((4,6))
-        para_send[:,0] = k_mat_used[0,:]
-        para_send[:,1] = b_mat_used[0,:]
-        para_send[:,2] = qe_mat_used[0,:]
-        para_send[:,3] = k_mat_used[1,:]
-        para_send[:,4] = b_mat_used[1,:]
-        para_send[:,5] = qe_mat_used[1,:]
-        save_path = "/home/yuxuan/Project/HPS_Perception/map_ws/src/HPS_Perception/hps_baseline/result/"
-        np.save(save_path+"v_{}_s_{}_best.npy".format(self.context[0], self.context[1]), para_send)
 
     def replot_kt(self):
         p_0, p_1 = self.gait_divisions[self.tp][0], self.gait_divisions[self.tp][1]

@@ -53,7 +53,6 @@ def cal_qe_knee_phase1(q_k, t_k):
     angle = np.rad2deg(np.arcsin(np.cross(va, vb)))
     imp_k,pcov = curve_fit(staticimpFun, q_k[p_0:p_1],
                         t_k[p_0:p_1], bounds=((0,0),(100,40)))
-    # print(imp_k)
     return imp_k, p_0, p_1, p_2
 
 def cal_qe_knee_phase2(q_k, t_k):
@@ -85,24 +84,30 @@ def cal_qe_ankle_phase1(q_a, t_a):
 def cal_qe_ankle_phase2(q_a, t_a):
     p_1 = np.argmax(t_a)
     p_0 = p_1 - 10
-    p_2 = p_1 + 10
+    p_2 = p_1 + 20
     max_qa = np.max(q_a[40:80])
     def staticimpFun(x, k, qe):
         return k*(x-qe)
     imp_a1,_ = curve_fit(staticimpFun, q_a[p_1:p_2],
-                        t_a[p_1:p_2], bounds=((0,-5),(15,15)))
+                        t_a[p_1:p_2], bounds=((0,-10),(15,15)))
     imp_a2,pcov = curve_fit(staticimpFun, q_a[p_0:p_1],
                          t_a[p_0:p_1], bounds=((0,-5),(40,max_qa)))
     imp_a = imp_a1
     return imp_a, p_0, p_1, p_2
 
+def cal_tpred(q, dq, imp,reverse=False):
+    if not reverse:
+        return imp[0]*(q-imp[2])+imp[1]*dq
+    else:
+        return imp[0]*(q+imp[2])+imp[1]*dq
+
 def cal_imp_kbqe(q, dq, t, bound, unbound=False, reverse=False):
     if not reverse:
         def impFun(x, k, b, qe):
-            return k*(x[0]-qe)+b*x[1]
+            return k*(x[0]-qe)+(b+0.0005)*x[1]
     else:
         def impFun(x, k, b, qe):
-            return k*(x[0]+qe)+b*x[1]
+            return k*(x[0]+qe)+(b+0.0005)*x[1]
     if unbound:
         imp,_ = curve_fit(impFun,[q, dq],t,bounds=((0,0,0),(10,1,90)))
     else:
@@ -153,7 +158,7 @@ def get_parabola(q0, s1, q1, s2, q2, dt=0.01):
     t_new = np.arange(s2+1)*dt
     return q_new, t_new
 
-def system_model(x,dx,u,dt, iner=[0.06200995,4.33530566,2.51690043]):
+def system_model(x,dx,u,dt, iner=[0.06200995,4.33530566,1]):
     ddx = (u-iner[2]*dx-iner[1]*np.sin(x))/iner[0]
     dx = ddx*dt+dx
     x = dx*dt+x
