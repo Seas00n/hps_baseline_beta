@@ -53,7 +53,7 @@ def cal_qe_knee_phase1(q_k, t_k):
     angle = np.rad2deg(np.arcsin(np.cross(va, vb)))
     imp_k,pcov = curve_fit(staticimpFun, q_k[p_0:p_1],
                         t_k[p_0:p_1], bounds=((0,0),(100,40)))
-    print(imp_k)
+    # print(imp_k)
     return imp_k, p_0, p_1, p_2
 
 def cal_qe_knee_phase2(q_k, t_k):

@@ -57,7 +57,7 @@ rd_aq = phase_shift(rd_aq, 6)[:,0:idx_slope_end]
 rd_at = phase_shift(rd_at, 6)[:,0:idx_slope_end]
 
 s = scio.loadmat(path_+"speed.mat")["speed"][6:15:4]
-ps = 8
+ps = 5
 s_hq = scio.loadmat(path_+"treadmill_hip_theta.mat")["treadmill_hip_theta"]
 s_ht = scio.loadmat(path_+"treadmill_hip_tau.mat")["treadmill_hip_tau"]
 s_hq = phase_shift(s_hq, ps)[:,:20][:,6:15:4]

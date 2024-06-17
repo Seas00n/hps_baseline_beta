@@ -9,16 +9,16 @@ import numpy as np
 from pyqtgraph.parametertree import interact, ParameterTree, Parameter
 import random
 from utils import *
-import lcm
+# import lcm
 import sys
-sys.path.append("/home/yuxuan/Project/HPS_Perception/map_ws/src/HPS_Perception/hps_moco/scripts")
-from core.impedance_lcm.exlcm import impedance_info
+# sys.path.append("/home/yuxuan/Project/HPS_Perception/map_ws/src/HPS_Perception/hps_moco/scripts")
+# from core.impedance_lcm.exlcm import impedance_info
 
 
 class ImpTune(QtWidgets.QMainWindow):
     def __init__(self, dataset='t'):
         super().__init__()
-        self.resize(800, 1000)
+        self.resize(600, 800)
         self.layout = pg.LayoutWidget()
         self.setCentralWidget(self.layout)
 
@@ -84,7 +84,7 @@ class ImpTune(QtWidgets.QMainWindow):
 
         self.layout.addWidget(tree, row=0, col=0)
         self.layout.addWidget(self.win, row=3, col=0, rowspan=2,colspan=5)
-        self.lc = lcm.LCM()
+        # self.lc = lcm.LCM()
 
         
 
@@ -249,22 +249,32 @@ class ImpTune(QtWidgets.QMainWindow):
             self.ax_kq_phase[3].setData(x=np.arange(self.gait_divisions[2][0]+len(q_opt_s1), 
                                                     self.gait_divisions[2][0]+len(q_opt_s1)+len(q_opt_s2)), 
                                         y=np.rad2deg(q_opt_s2))
-
+        q_k_swing_real = np.copy(q_k_swing)
+        
         q_k_swing, t_swing = get_parabola(
                 q0=q_k_swing[0],q1=np.max(q_k_swing),q2=q_k_swing[-1],
-                s1=np.argmax(q_k_swing),s2=np.shape(q_k_swing)[0],dt=self.dt)
-        result = minimize(cost_function, (50,2,50,2), args=(q_k_swing, self.dt), method='Nelder-Mead',
-                            bounds=((20,70),(1.5,10),(20,70),(1.5,10)))
+                s1=np.argmax(q_k_swing),s2=np.shape(q_k_swing)[0]-1,dt=self.dt)
+    
+        result = minimize(cost_function, (20,1,20,1), args=(q_k_swing, self.dt), method='Nelder-Mead',
+                            bounds=((20,50),(1.3,2),(20,50),(1,2)))
         kp3, kb3, _,_ = result.x
         qe3 = np.max(q_k_swing)+10
         imp_k3 = [np.deg2rad(kp3), np.deg2rad(kb3), qe3]
-        
-        result2 = minimize(cost_function2, (50,2), args=(q_k_swing, self.dt), method='Nelder-Mead',
-                            bounds=((0,70),(1.5,10)))
+
+        result2 = minimize(cost_function2, (20,1), args=(q_k_swing, self.dt), method='Nelder-Mead',
+                            bounds=((20,50),(0.5,2)))
         kp4, kb4 = result2.x
         qe4 = q_k_swing[-1]-5 if q_k_swing[-1]>5 else 0
         imp_k4 = [np.deg2rad(kp4), np.deg2rad(kb4), qe4]
         plot_q_opt()
+
+        print(q_k_swing[0])
+        print(q_k_swing_real[0])
+        print(np.rad2deg(q_opt_s1[0]))
+        np.save("../writting/data/desired_qk_sw_{}.npy".format(self.context[0]), q_k_swing_real)
+        np.save("../writting/data/actual_qk_sw1_{}.npy".format(self.context[0]), np.rad2deg(q_opt_s1))
+        np.save("../writting/data/actual_qk_sw2_{}.npy".format(self.context[0]), np.rad2deg(q_opt_s2))
+        np.save("../writting/data/t_sw_{}.npy".format(self.context[0]), t_swing)
         return imp_k3, imp_k4
 
     def gait_division_IJRR(self):
@@ -273,7 +283,7 @@ class ImpTune(QtWidgets.QMainWindow):
         idx_max_ta = np.argmax(self.t_a)
         gait_divisions.append([gait_divisions[-1][1], np.where(self.t_a[idx_max_ta:80]<40)[0][0]+idx_max_ta])
         gait_divisions.append([gait_divisions[-1][1], np.argmax(self.q_k)])
-        gait_divisions.append([gait_divisions[-1][1], self.idx[-1]])
+        gait_divisions.append([gait_divisions[-1][1], self.idx[-1]+1])
         self.gait_divisions = gait_divisions
 
     def cal_imp_IJRR(self, undamping=False):
@@ -527,12 +537,12 @@ class ImpTune(QtWidgets.QMainWindow):
         para_send[:,3] = k_mat_used[1,:]
         para_send[:,4] = b_mat_used[1,:]
         para_send[:,5] = qe_mat_used[1,:]
-        msg = impedance_info()
-        msg.para_phase1 = para_send[0,:]
-        msg.para_phase2 = para_send[1,:]
-        msg.para_phase3 = para_send[2,:]
-        msg.para_phase4 = para_send[3,:]
-        self.lc.publish("Impedance_Info", msg.encode())
+        # msg = impedance_info()
+        # msg.para_phase1 = para_send[0,:]
+        # msg.para_phase2 = para_send[1,:]
+        # msg.para_phase3 = para_send[2,:]
+        # msg.para_phase4 = para_send[3,:]
+        # self.lc.publish("Impedance_Info", msg.encode())
 
     def replot_kt(self):
         p_0, p_1 = self.gait_divisions[self.tp][0], self.gait_divisions[self.tp][1]
