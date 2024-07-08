@@ -50,6 +50,31 @@ def load_data_temp(ab_k, vk, sk):
     mean_data = np.mean(data, axis=2)
     return data, mean_data, std_data
 
+def find_longest_consecutive_repeated_sequence(seq):
+    if not seq :  # 如果序列为空，返回空序列
+        return []
+
+    max_length = 1
+    current_length = 1
+    longest_sequence_start = 0
+
+    for i in range(1, len(seq)):
+        if seq[i] == seq[i - 1]:
+            current_length += 1
+        else:
+            if current_length > max_length:
+                max_length = current_length
+                longest_sequence_start = i - max_length
+            current_length = 1
+
+    # 检查最后一个窗口
+    if current_length > max_length:
+        max_length = current_length
+        longest_sequence_start = len(seq) - max_length
+
+    return len(seq[longest_sequence_start:longest_sequence_start + max_length])
+
+
 def interp101(data, mean_data):
     data_new = np.zeros((data.shape[0],101,data.shape[2])) 
     x = np.linspace(0,100,150)
@@ -61,7 +86,7 @@ def interp101(data, mean_data):
     return data_new, mean_data_new
     
 
-def load_data(vk, sk, ab_k="AB06",m=60):
+def load_data(vk, sk, ab_k="AB06",m=60,show=False, ax=None):
     exists = (vk in v_key) and (sk in s_key)
     if not exists:
         print("Velocity or Slope not exists")
@@ -72,6 +97,8 @@ def load_data(vk, sk, ab_k="AB06",m=60):
     ab_info = np.load(path_+ab_k+"/ab_info.npy")
     print(ab_info)
     data = np.load(path_+ab_k+"/v{}_s{}.npy".format(vk, sk))
+    # data = data[:,:,5:-5]
+    ######################################
     mean_data = np.mean(data, axis=2)
     std_data = np.std(data, axis=2)
     dis_mean = data[4:6,:,:]-mean_data[4:6,:].reshape((2,-1,1))
@@ -79,7 +106,17 @@ def load_data(vk, sk, ab_k="AB06",m=60):
     sig_mask = np.sum(np.sum(sig_mask, axis=1),axis=0)
     idx_deleted = np.where(sig_mask>15)[0]
     data = np.delete(data, idx_deleted, axis=2)
-    idx_deleted2 = np.where(np.max(-data[4,15:25,:]*m, axis=0)<5)[0]
+    #######################################
+    equal_mask = np.zeros((data.shape[2],))
+    for i in range(equal_mask.shape[0]):
+        equal_mask[i] = np.int64(find_longest_consecutive_repeated_sequence((data[4,:,i]*m).tolist()))-1
+        equal_mask[i] = equal_mask[i] + np.int64(find_longest_consecutive_repeated_sequence((data[5,:,i]*m).tolist()))-1
+    idx_deleted = np.where(equal_mask>5)[0]
+    data = np.delete(data, idx_deleted, axis=2)
+    if show:
+        ax.plot(np.arange(data.shape[1]), -data[4,:,:]*m, alpha=0.2, color='g')
+    #######################################
+    idx_deleted2 = np.where(np.max(-data[4,:25,:]*m, axis=0)<-5)[0]
     data = np.delete(data, idx_deleted2, axis=2)
     data = data[[1,4,2,5],:,:]
     data[0] = data[0]-2
@@ -87,9 +124,10 @@ def load_data(vk, sk, ab_k="AB06",m=60):
     data[3] = -data[3]*m
     mean_data = np.mean(data, axis=2)
     data, mean_data = interp101(data, mean_data)
+    if show:
+        ax.plot(np.linspace(0,150,data.shape[1]), data[1,:,:], alpha=0.5, color='r')
     mean_data = gaussian_filter1d(mean_data, sigma=2, axis=1)
     return data, mean_data
-
 
 
 # data, mean_data, std_data= load_data_temp("AB06","0.8","5")

@@ -6,6 +6,7 @@ from scipy.optimize import curve_fit
 from scipy import integrate
 from scipy.signal import argrelextrema
 from scipy.interpolate import griddata
+
 import os
 current_dir = os.path.dirname(os.path.realpath(__file__))
 v_s_t_grid = np.load(current_dir+"/v_s_t_grid.npy")
@@ -43,21 +44,25 @@ def grid_interp_dt(v, s, num_frame):
 def cal_qe_knee_phase1(q_k, t_k):
     p_1 = np.argmax(t_k[0:25])
     p_0 = p_1-10 if p_1 >10 else 0
+    if p_0 == p_1:
+        p_0 = 0
+        p_1 = 10
     p_2 = np.argmin(t_k[30:40])+30
     imp_k = [0,0]
     def staticimpFun(x, k, qe):
         return k*(x-qe)
-    va = np.array([q_k[p_2]-q_k[p_1], t_k[p_2]-t_k[p_1]])
-    va = va/np.linalg.norm(va)
-    vb = np.array([q_k[p_0]-q_k[p_1], t_k[p_0]-t_k[p_1]])
-    vb = vb/np.linalg.norm(vb)
-    angle = np.rad2deg(np.arcsin(np.cross(va, vb)))
+    # va = np.array([q_k[p_2]-q_k[p_1], t_k[p_2]-t_k[p_1]])
+    # va = va/np.linalg.norm(va)
+    # vb = np.array([q_k[p_0]-q_k[p_1], t_k[p_0]-t_k[p_1]])
+    # vb = vb/np.linalg.norm(vb)
+    # angle = np.rad2deg(np.arcsin(np.cross(va, vb)))
     imp_k,pcov = curve_fit(staticimpFun, q_k[p_0:p_1],
                         t_k[p_0:p_1], bounds=((0,0),(100,40)))
     return imp_k, p_0, p_1, p_2
 
 def cal_qe_knee_phase2(q_k, t_k):
-    p_1 = argrelextrema(t_k[30:60], np.less)[0][0]+30
+    idx_max_t_k = np.argmax(t_k[10:30])
+    p_1 = argrelextrema(t_k[idx_max_t_k:60], np.less)[0][0]+idx_max_t_k
     p_0 = p_1 - 10
     p_2 = p_1 + 10
     imp_k = [0,0]
@@ -69,7 +74,6 @@ def cal_qe_knee_phase2(q_k, t_k):
     # imp_k[1] = q_k[p_1]-t_k[p_1]/imp_k[0]
     imp_k,_ = curve_fit(staticimpFun, q_k[p_1:p_2],
                         t_k[p_1:p_2], bounds=((0,0),(5,30)))
-    
     return imp_k, p_0, p_1, p_2
 
 def cal_qe_ankle_phase1(q_a, t_a):

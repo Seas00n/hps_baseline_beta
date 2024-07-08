@@ -9,7 +9,7 @@ import numpy as np
 from pyqtgraph.parametertree import interact, ParameterTree, Parameter
 import random
 from utils import *
-
+import sys
 
 
 class ImpTune(QtWidgets.QMainWindow):
@@ -88,6 +88,8 @@ class ImpTune(QtWidgets.QMainWindow):
 
         self.layout.addWidget(tree, row=0, col=0)
         self.layout.addWidget(self.win, row=3, col=0, rowspan=2,colspan=5)
+        # self.lc = lcm.LCM()
+
         
 
     def init_win(self):
@@ -207,13 +209,16 @@ class ImpTune(QtWidgets.QMainWindow):
             q = qdes[0]
             dq = 0
             total_error = 0
+            qk_buf = np.zeros((5,))
             for i in range(s1+5):
+                qk_buf[0:-1] = qk_buf[1:]
+                qk_buf[-1] = q
                 q_opt_s1.append(q)
                 dq_opt_s1.append(dq)
                 t_opt_s1.append(dt*i)
                 refq = qdes[i]
                 e = q-refq
-                if qe1 - q > np.deg2rad(10):
+                if qe1 - np.min(qk_buf) > np.deg2rad(10):
                     u = -kp1*(q-qe1)-kb1*dq
                 else:
                     break
@@ -254,7 +259,7 @@ class ImpTune(QtWidgets.QMainWindow):
             self.ax_kq_phase[3].setData(x=np.arange(self.gait_divisions[2][0]+len(q_opt_s1), 
                                                     self.gait_divisions[2][0]+len(q_opt_s1)+len(q_opt_s2)), 
                                         y=np.rad2deg(q_opt_s2))
-        q_k_swing_real = np.copy(q_k_swing)
+
         q_k_swing, t_swing = get_parabola(
                 q0=q_k_swing[0],q1=np.max(q_k_swing),q2=q_k_swing[-1],
                 s1=np.argmax(q_k_swing),s2=np.shape(q_k_swing)[0]-1,dt=self.dt)
@@ -262,20 +267,18 @@ class ImpTune(QtWidgets.QMainWindow):
                             bounds=((20,50),(1.3,2),(20,50),(1,2)))
         kp3, kb3, _,_ = result.x
         print(kp3, kb3)
-        qe3 = np.max(q_k_swing)+10
+        qe3 = np.max(q_k_swing)
         imp_k3 = [np.deg2rad(kp3), np.deg2rad(kb3), qe3]
         
         result2 = minimize(cost_function2, (20,1), args=(q_k_swing, self.dt), method='SLSQP',
                             bounds=((20,50),(0.5,2)))
         kp4, kb4 = result2.x
         print(kp4, kb4)
-        qe4 = self.qe_k[0]
+        # qe4 = self.qe_k[0]
+        qe4 = q_k_swing[-1]
         imp_k4 = [np.deg2rad(kp4), np.deg2rad(kb4), qe4]
         plot_q_opt()
-        np.save("../writting/data/desired_qk_sw_{}.npy".format(self.context[0]), q_k_swing_real)
-        np.save("../writting/data/actual_qk_sw1_{}.npy".format(self.context[0]), np.rad2deg(q_opt_s1))
-        np.save("../writting/data/actual_qk_sw2_{}.npy".format(self.context[0]), np.rad2deg(q_opt_s2))
-        np.save("../writting/data/t_sw_{}.npy".format(self.context[0]), t_swing)
+    
         return imp_k3, imp_k4
 
     def gait_division_IJRR(self):
@@ -308,7 +311,7 @@ class ImpTune(QtWidgets.QMainWindow):
         self.cal_st_qe_MT()
         qe_k, qe_a = np.array(self.qe_k), -np.array(self.qe_a)
 
-        b_stance = 8.5/30
+        b_stance = 10/30
 
         p, c = 0, 'r'
         p_0, p_1 = self.gait_divisions[p][0], self.gait_divisions[p][1]
@@ -370,7 +373,8 @@ class ImpTune(QtWidgets.QMainWindow):
         if undamping:
             imp_a, t_a_pred = cal_imp_kbqe(q_a[idx],dq_a[idx],t_a[idx], bound=0, unbound=True)
         else:
-            bound_a = ((0,0,0), (1,0.1,5))
+            # bound_a = ((0,0,0), (1,0.1,5))
+            bound_a = ((0.7,0.025,-5), (0.8,0.03,5))
             imp_a, t_a_pred = cal_imp_kbqe(q_a[idx],dq_a[idx],t_a[idx], bound=bound_a, 
                                            unbound=False, reverse=True)
         plot_result()
@@ -386,7 +390,8 @@ class ImpTune(QtWidgets.QMainWindow):
         if undamping:
             imp_a, t_a_pred = cal_imp_kbqe(q_a[idx],dq_a[idx],t_a[idx], bound=0, unbound=True)
         else:
-            bound_a = ((1,0), (2,0.1))
+            # bound_a = ((1,0), (2,0.1))
+            bound_a = ((0.6,0.03), (0.7,0.031))
             imp_a, t_a_pred = cal_imp_kb(q_a[idx],dq_a[idx],qe_a[0],t_a[idx], bound=bound_a, 
                                          unbound=False, reverse=True)
         plot_result()

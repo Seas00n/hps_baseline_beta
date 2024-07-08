@@ -4,7 +4,7 @@ import numpy as np
 from plot_utils import ImpTune
 pg.mkQApp()
 
-dataset_name = 't'
+dataset_name = 'g'
 
 
 imp_tuner = ImpTune(dataset=dataset_name)
